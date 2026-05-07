@@ -2,26 +2,34 @@ package main
 
 import (
 	"log"
-	"os"
 
 	"github.com/gin-gonic/gin"
+
+	"api-gateway/internal/config"
 	"api-gateway/internal/handlers"
+	"api-gateway/internal/middleware"
+	"api-gateway/internal/proxy"
 )
 
 func main() {
-	port := os.Getenv("PORT")
-	if port == "" {
-		port = "8080"
-	}
+	config.LoadEnv()
+
+	port := config.GetEnv("PORT", "8080")
+	target := config.GetEnv("TARGET_SERVICE", "http://localhost:9000")
 
 	router := gin.Default()
 
-	// Health check
+	// Middleware
+	router.Use(middleware.Logger())
+
+	// Health
 	router.GET("/health", handlers.HealthCheck)
 
-	log.Println("Starting API Gateway on port:", port)
-	err := router.Run(":" + port)
-	if err != nil {
-		log.Fatal("Server failed to start:", err)
-	}
+	// Proxy route
+	router.Any("/api/*path", proxy.ReverseProxy(target))
+
+	log.Println("Gateway running on port:", port)
+	log.Println("Forwarding requests to:", target)
+
+	router.Run(":" + port)
 }
